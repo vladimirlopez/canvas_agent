@@ -64,3 +64,15 @@ class CanvasClient:
             r.raise_for_status()
             finish = r.json()
         return finish
+
+    # Modules
+    def list_modules(self, course_id: str):
+        return self._get(f'/api/v1/courses/{course_id}/modules')
+
+    def create_module(self, course_id: str, name: str, position: int | None = None, publish: bool = True):
+        data = {'module[name]': name}
+        if position is not None:
+            data['module[position]'] = str(position)
+        if publish:
+            data['module[published]'] = 'true'
+        return self._post(f'/api/v1/courses/{course_id}/modules', data=data)

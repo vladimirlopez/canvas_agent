@@ -44,12 +44,34 @@ def upload_file_action(client: CanvasClient, params: Dict[str, Any]):
     resp = client.upload_file_to_course(course_id, filepath)
     return f"Uploaded: {resp}"
 
+
+def list_modules_action(client: CanvasClient, params: Dict[str, Any]):
+    course_id = params.get('course_id')
+    if not course_id:
+        return 'Please specify a course_id.'
+    modules = client.list_modules(course_id)
+    if not modules:
+        return f"No modules found for course {course_id}."
+    lines = [f"{m.get('id')}: {m.get('name')} (items: {m.get('items_count')})" for m in modules]
+    return f"Modules for course {course_id}:\n" + "\n".join(lines)
+
+
+def create_module_action(client: CanvasClient, params: Dict[str, Any]):
+    course_id = params.get('course_id')
+    name = params.get('name')
+    if not course_id or not name:
+        return 'Usage: create module <course_id> <module name>'
+    resp = client.create_module(course_id, name)
+    return f"Created module: {resp.get('id')} - {resp.get('name')}"
+
 ACTIONS = {
     'list courses': list_courses_action,
     'list assignments': list_assignments_action,
     'list files': list_files_action,
     'download file': download_file_action,
     'upload file': upload_file_action,
+    'list modules': list_modules_action,
+    'create module': create_module_action,
 }
 
 
@@ -57,19 +79,21 @@ def dispatch_action(client: CanvasClient, user_text: str):
     lower = user_text.lower()
     for key, fn in ACTIONS.items():
         if lower.startswith(key):
-            # naive param extraction
             parts = user_text.split()
-            params = {}
-            if 'assignments' in key and len(parts) > 2:
-                params['course_id'] = parts[-1]
-            if 'files' in key and len(parts) > 2:
-                params['course_id'] = parts[-1]
-            if 'download file' in key and len(parts) > 2:
-                params['file_id'] = parts[-1]
-            if 'upload file' in key:
-                # expect: upload file <course_id> <path>
-                if len(parts) >= 4:
-                    params['course_id'] = parts[2]
-                    params['filepath'] = parts[3]
+            params: Dict[str, Any] = {}
+            if key == 'list assignments' and len(parts) >= 3:
+                params['course_id'] = parts[2]
+            elif key == 'list files' and len(parts) >= 3:
+                params['course_id'] = parts[2]
+            elif key == 'download file' and len(parts) >= 3:
+                params['file_id'] = parts[2]
+            elif key == 'upload file' and len(parts) >= 4:
+                params['course_id'] = parts[2]
+                params['filepath'] = parts[3]
+            elif key == 'list modules' and len(parts) >= 3:
+                params['course_id'] = parts[2]
+            elif key == 'create module' and len(parts) >= 4:
+                params['course_id'] = parts[2]
+                params['name'] = " ".join(parts[3:])
             return fn(client, params)
     return None

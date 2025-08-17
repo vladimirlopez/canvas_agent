@@ -89,7 +89,13 @@ if user_input:
     if action_response:
         reply = action_response
     else:
-        system_prompt = "You are a helpful assistant for interacting with Canvas LMS. If the user issues an action you cannot perform, politely suggest an actionable command starting with one of: list courses, list assignments <course_id>, list files <course_id>, download file <file_id>, upload file <course_id> <path>."
+        system_prompt = (
+            "You are a helpful assistant for interacting with Canvas LMS. "
+            "If the user wants something accomplished, directly choose and perform the closest supported action instead of giving instructions. "
+            "Supported commands: list courses | list assignments <course_id> | list files <course_id> | "
+            "download file <file_id> | upload file <course_id> <path> | list modules <course_id> | create module <course_id> <name>. "
+            "If an action is impossible due to missing info, ask succinctly for ONLY the missing parameter (course id, file id, etc.)."
+        )
         reply = ollama_chat(selected_model, user_input, system=system_prompt)
     st.session_state.history.append(("assistant", reply))
     with st.chat_message("assistant"):
