@@ -16,8 +16,12 @@ def get_env_value(key: str, default: str = ""):
     2. OS environment / .env file via load_dotenv
     3. Provided default
     """
-    if key in st.secrets:  # type: ignore[attr-defined]
-        return st.secrets[key]  # type: ignore[index]
+    try:
+        # Access may raise StreamlitSecretNotFoundError if secrets file missing
+        if key in st.secrets:  # type: ignore[attr-defined]
+            return st.secrets[key]  # type: ignore[index]
+    except Exception:
+        pass
     return os.getenv(key, default)
 
 st.set_page_config(page_title="CanvasAgent", page_icon="🎓", layout="wide")
@@ -40,7 +44,10 @@ canvas_token = st.sidebar.text_input(
     "Canvas API Token", value=canvas_token_default, type='password'
 )
 
-token_source = 'secrets' if 'CANVAS_API_TOKEN' in getattr(st, 'secrets', {}) else 'input/env'
+try:
+    token_source = 'secrets' if 'CANVAS_API_TOKEN' in st.secrets else 'input/env'  # type: ignore[attr-defined]
+except Exception:
+    token_source = 'input/env'
 if canvas_token:
     st.sidebar.caption(f"Token source: {token_source}")
 
