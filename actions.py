@@ -1,0 +1,75 @@
+from typing import Dict, Any
+from canvas_client import CanvasClient
+
+# Simple intent matching (very naive). In production use proper NLP or function calling.
+
+def list_courses_action(client: CanvasClient, params: Dict[str, Any]):
+    courses = client.list_courses()
+    lines = [f"{c.get('id')}: {c.get('name')}" for c in courses]
+    return "Courses:\n" + "\n".join(lines)
+
+
+def list_assignments_action(client: CanvasClient, params: Dict[str, Any]):
+    course_id = params.get('course_id')
+    if not course_id:
+        return 'Please specify a course_id.'
+    assignments = client.list_assignments(course_id)
+    lines = [f"{a.get('id')}: {a.get('name')} (due: {a.get('due_at')})" for a in assignments]
+    return f"Assignments for course {course_id}:\n" + "\n".join(lines)
+
+
+def list_files_action(client: CanvasClient, params: Dict[str, Any]):
+    course_id = params.get('course_id')
+    if not course_id:
+        return 'Please specify a course_id.'
+    files = client.list_files(course_id)
+    lines = [f"{f.get('id')}: {f.get('filename')} ({f.get('size')} bytes)" for f in files]
+    return f"Files for course {course_id}:\n" + "\n".join(lines)
+
+
+def download_file_action(client: CanvasClient, params: Dict[str, Any]):
+    file_id = params.get('file_id')
+    dest = params.get('dest', f'downloads/{file_id}')
+    if not file_id:
+        return 'Please specify a file_id.'
+    path = client.download_file(file_id, dest)
+    return f"Downloaded file to {path}"
+
+
+def upload_file_action(client: CanvasClient, params: Dict[str, Any]):
+    course_id = params.get('course_id')
+    filepath = params.get('filepath')
+    if not course_id or not filepath:
+        return 'Please specify course_id and filepath.'
+    resp = client.upload_file_to_course(course_id, filepath)
+    return f"Uploaded: {resp}"
+
+ACTIONS = {
+    'list courses': list_courses_action,
+    'list assignments': list_assignments_action,
+    'list files': list_files_action,
+    'download file': download_file_action,
+    'upload file': upload_file_action,
+}
+
+
+def dispatch_action(client: CanvasClient, user_text: str):
+    lower = user_text.lower()
+    for key, fn in ACTIONS.items():
+        if lower.startswith(key):
+            # naive param extraction
+            parts = user_text.split()
+            params = {}
+            if 'assignments' in key and len(parts) > 2:
+                params['course_id'] = parts[-1]
+            if 'files' in key and len(parts) > 2:
+                params['course_id'] = parts[-1]
+            if 'download file' in key and len(parts) > 2:
+                params['file_id'] = parts[-1]
+            if 'upload file' in key:
+                # expect: upload file <course_id> <path>
+                if len(parts) >= 4:
+                    params['course_id'] = parts[2]
+                    params['filepath'] = parts[3]
+            return fn(client, params)
+    return None
