@@ -97,3 +97,18 @@ def dispatch_action(client: CanvasClient, user_text: str):
                 params['name'] = " ".join(parts[3:])
             return fn(client, params)
     return None
+
+
+def perform_action(client: CanvasClient, action_name: str, params: Dict[str, Any]):
+    """Perform an action by canonical name (case-insensitive).
+
+    Returns result string or error message.
+    """
+    key = action_name.lower().strip()
+    fn = ACTIONS.get(key)
+    if not fn:
+        return f"Unknown action '{action_name}'."
+    try:
+        return fn(client, params)
+    except Exception as e:
+        return f"Action '{action_name}' failed: {e}"

@@ -3,7 +3,8 @@ import streamlit as st
 from dotenv import load_dotenv
 from canvas_client import CanvasClient
 from llm import list_ollama_models, ollama_chat
-from actions import dispatch_action
+from actions import dispatch_action, perform_action
+from intent import parse_intent
 
 load_dotenv()  # loads variables from a .env file if present
 
@@ -82,19 +83,42 @@ user_input = st.chat_input("Ask something or issue an action (e.g., 'list course
 
 if user_input:
     st.session_state.history.append(("user", user_input))
-    # Try to dispatch action
-    action_response = None
+    reply = None
     if client:
-        action_response = dispatch_action(client, user_input)
-    if action_response:
-        reply = action_response
-    else:
+        # Attempt NL intent parsing first
+        courses_cache = []
+        if 'courses_cache' not in st.session_state:
+            try:
+                st.session_state.courses_cache = client.list_courses()
+            except Exception:
+                st.session_state.courses_cache = []
+        courses_cache = st.session_state.courses_cache
+        intent = parse_intent(user_input, courses_cache)
+        if intent.get('action') and intent.get('confidence', 0) >= 0.55:
+            # Ensure required params for some actions
+            action_name = intent['action']
+            params = intent['params']
+            # If course-dependent action missing course_id, ask for it
+            if action_name in {'list assignments','list files','list modules','create module'} and 'course_id' not in params:
+                reply = 'Please provide the course id.'
+            elif action_name == 'create module' and 'name' not in params:
+                reply = 'Please provide the module name.'
+            elif action_name == 'download file' and 'file_id' not in params:
+                reply = 'Please provide the file id.'
+            else:
+                reply = perform_action(client, action_name, params)
+        if not reply:
+            # Fallback to legacy explicit command dispatch
+            explicit = dispatch_action(client, user_input)
+            if explicit:
+                reply = explicit
+    if not reply:
+        # LLM fallback for conversational answer / guidance
         system_prompt = (
-            "You are a helpful assistant for interacting with Canvas LMS. "
-            "If the user wants something accomplished, directly choose and perform the closest supported action instead of giving instructions. "
-            "Supported commands: list courses | list assignments <course_id> | list files <course_id> | "
-            "download file <file_id> | upload file <course_id> <path> | list modules <course_id> | create module <course_id> <name>. "
-            "If an action is impossible due to missing info, ask succinctly for ONLY the missing parameter (course id, file id, etc.)."
+            "You are a Canvas automation assistant. If the user expresses an intent that maps to a supported action, "
+            "respond ONLY with a concise clarification for missing parameters; otherwise answer normally. Supported actions: "
+            "list courses, list assignments <course_id>, list files <course_id>, download file <file_id>, upload file <course_id> <path>, "
+            "list modules <course_id>, create module <course_id> <name>."
         )
         reply = ollama_chat(selected_model, user_input, system=system_prompt)
     st.session_state.history.append(("assistant", reply))
