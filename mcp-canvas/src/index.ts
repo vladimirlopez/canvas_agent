@@ -24,6 +24,14 @@ import { CanvasClient } from './canvas';
 import { createAssignmentTool } from './tools/create_assignment';
 import { attachRubricTool } from './tools/attach_rubric';
 
+// Global error visibility so VS Code surfaces issues instead of silent exits
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
+
 // Validate environment variables
 const baseUrl = process.env.CANVAS_BASE_URL;
 const token = process.env.CANVAS_TOKEN || process.env.CANVAS_API_TOKEN;
@@ -38,21 +46,21 @@ if (!baseUrl || !token) {
 // Initialize Canvas client
 const canvasClient = new CanvasClient(baseUrl, token);
 
-// Test connection on startup
-console.log('🔌 Testing Canvas connection...');
-canvasClient.testConnection()
-  .then(result => {
-    if (result.success) {
-      console.log(`✅ Connected to Canvas as: ${result.user?.name || 'Unknown User'}`);
-    } else {
-      console.error(`❌ Canvas connection failed: ${result.error}`);
-      process.exit(1);
-    }
-  })
-  .catch(error => {
-    console.error(`❌ Canvas connection test failed: ${error.message}`);
-    process.exit(1);
-  });
+// Defer connection test until after server is listening so MCP initialize can proceed
+setImmediate(() => {
+  console.log('🔌 Testing Canvas connection...');
+  canvasClient.testConnection()
+    .then(result => {
+      if (result.success) {
+        console.log(`✅ Connected to Canvas as: ${result.user?.name || 'Unknown User'}`);
+      } else {
+        console.warn(`⚠️ Canvas connection failed (continuing; tools will error): ${result.error}`);
+      }
+    })
+    .catch(error => {
+      console.warn(`⚠️ Canvas connection test exception (continuing): ${error.message}`);
+    });
+});
 
 // Create MCP server
 const server = new Server(
@@ -114,6 +122,16 @@ server.connect(transport);
 
 console.log('📡 MCP Canvas server is running and ready for connections');
 console.log('Available tools:', tools.map(t => t.name).join(', '));
+
+// Keep-alive (some hosts may terminate quiet processes); harmless no-op
+setInterval(() => {}, 60_000).unref();
+
+// Optional heartbeat for debugging (enable by setting DEBUG_MCP_CANVAS=1)
+if (process.env.DEBUG_MCP_CANVAS) {
+  setInterval(() => {
+    console.log('[heartbeat] MCP Canvas server alive at', new Date().toISOString());
+  }, 30_000).unref();
+}
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
