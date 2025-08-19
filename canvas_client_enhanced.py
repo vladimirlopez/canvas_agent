@@ -61,6 +61,10 @@ class CanvasClientEnhanced:
                     response = self.session.get(url, params=params, timeout=30)
                 elif method == 'POST':
                     response = self.session.post(url, data=data, files=files, timeout=60)
+                elif method == 'PUT':
+                    response = self.session.put(url, data=data, timeout=60)
+                elif method == 'DELETE':
+                    response = self.session.delete(url, timeout=30)
                 else:
                     raise ValueError(f"Unsupported HTTP method: {method}")
                 
@@ -93,12 +97,27 @@ class CanvasClientEnhanced:
     # Canvas API methods
     def list_courses(self, enrollment_type: str = 'teacher') -> List[Dict[str, Any]]:
         """List courses with optional enrollment filtering."""
-        params = {'enrollment_type': enrollment_type, 'state': 'available'}
+        # Include both published and unpublished courses
+        params = {'enrollment_type': enrollment_type}
         return self._request('GET', '/api/v1/courses', params=params)
     
     def get_course(self, course_id: str) -> Dict[str, Any]:
         """Get detailed course information."""
         return self._request('GET', f'/api/v1/courses/{course_id}')
+    
+    def publish_course(self, course_id: str) -> Dict[str, Any]:
+        """Publish a course (change workflow_state from unpublished to available)."""
+        data = {
+            'course[event]': 'offer'  # This publishes the course
+        }
+        return self._request('PUT', f'/api/v1/courses/{course_id}', data=data)
+    
+    def unpublish_course(self, course_id: str) -> Dict[str, Any]:
+        """Unpublish a course (change workflow_state from available to unpublished)."""
+        data = {
+            'course[event]': 'claim'  # This unpublishes the course
+        }
+        return self._request('PUT', f'/api/v1/courses/{course_id}', data=data)
     
     def list_assignments(self, course_id: str, include: List[str] = None) -> List[Dict[str, Any]]:
         """List assignments with optional includes."""

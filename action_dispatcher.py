@@ -13,6 +13,8 @@ class CanvasActionDispatcher:
             # Course actions
             'list_courses': self._list_courses,
             'get_course_info': self._get_course_info,
+            'publish_course': self._publish_course,
+            'unpublish_course': self._unpublish_course,
             
             # Assignment actions
             'list_assignments': self._list_assignments,
@@ -321,3 +323,27 @@ Available capabilities: course management, assignments, modules, files, announce
         
         profile = self.client.get_user_profile(user_id)
         return f"**{profile.get('name')}**\\nEmail: {profile.get('primary_email')}\\nRole: {profile.get('bio', 'N/A')}"
+    
+    def _publish_course(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        if not course_id:
+            return "Please provide a course ID to publish."
+        
+        try:
+            result = self.client.publish_course(course_id)
+            course_name = result.get('name', 'Unknown Course')
+            return f"✅ Successfully published course: **{course_name}** (ID: {course_id})"
+        except Exception as e:
+            return f"❌ Failed to publish course {course_id}: {e}"
+    
+    def _unpublish_course(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        if not course_id:
+            return "Please provide a course ID to unpublish."
+        
+        try:
+            result = self.client.unpublish_course(course_id)
+            course_name = result.get('name', 'Unknown Course')
+            return f"✅ Successfully unpublished course: **{course_name}** (ID: {course_id})"
+        except Exception as e:
+            return f"❌ Failed to unpublish course {course_id}: {e}"

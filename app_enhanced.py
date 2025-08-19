@@ -179,38 +179,50 @@ def render_quick_actions(client: CanvasClientEnhanced):
     
     with col1:
         if st.button("📋 List Courses", key="quick_courses"):
-            courses = client.list_courses()
-            response = "**Your Courses:**\\n" + "\\n".join([
-                f"• **{c.get('name')}** (ID: {c.get('id')})" for c in courses
-            ])
-            st.session_state.history.append(("assistant", response))
-            st.rerun()
+            try:
+                courses = client.list_courses()
+                response = "**Your Courses:**\\n" + "\\n".join([
+                    f"• **{c.get('name')}** (ID: {c.get('id')})" for c in courses
+                ])
+                st.session_state.history.append(("assistant", response))
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Failed to fetch courses: {e}")
     
     with col2:
         if st.button("👤 My Profile", key="quick_profile"):
-            profile = client.get_user_profile()
-            response = f"**Your Profile:**\\n**Name:** {profile.get('name')}\\n**Email:** {profile.get('primary_email')}"
-            st.session_state.history.append(("assistant", response))
-            st.rerun()
+            try:
+                profile = client.get_user_profile()
+                response = f"**Your Profile:**\\n**Name:** {profile.get('name')}\\n**Email:** {profile.get('primary_email')}"
+                st.session_state.history.append(("assistant", response))
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Failed to fetch profile: {e}")
     
     if st.session_state.selected_course:
         course_id = st.session_state.selected_course.get('id')
         
         if st.button("📝 List Assignments", key="quick_assignments"):
-            assignments = client.list_assignments(course_id)
-            response = f"**Assignments in {st.session_state.selected_course.get('name')}:**\\n" + "\\n".join([
-                f"• **{a.get('name')}** ({a.get('points_possible', 0)} pts)" for a in assignments
-            ])
-            st.session_state.history.append(("assistant", response))
-            st.rerun()
+            try:
+                assignments = client.list_assignments(course_id)
+                response = f"**Assignments in {st.session_state.selected_course.get('name')}:**\\n" + "\\n".join([
+                    f"• **{a.get('name')}** ({a.get('points_possible', 0)} pts)" for a in assignments
+                ])
+                st.session_state.history.append(("assistant", response))
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Failed to fetch assignments: {e}")
         
         if st.button("📚 List Modules", key="quick_modules"):
-            modules = client.list_modules(course_id)
-            response = f"**Modules in {st.session_state.selected_course.get('name')}:**\\n" + "\\n".join([
-                f"• **{m.get('name')}** ({m.get('items_count', 0)} items)" for m in modules
-            ])
-            st.session_state.history.append(("assistant", response))
-            st.rerun()
+            try:
+                modules = client.list_modules(course_id)
+                response = f"**Modules in {st.session_state.selected_course.get('name')}:**\\n" + "\\n".join([
+                    f"• **{m.get('name')}** ({m.get('items_count', 0)} items)" for m in modules
+                ])
+                st.session_state.history.append(("assistant", response))
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Failed to fetch modules: {e}")
 
 def render_debug_info(client: CanvasClientEnhanced):
     """Render debug information."""
