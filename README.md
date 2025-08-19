@@ -1,30 +1,46 @@
 # CanvasAgent
 
-A Streamlit chat interface that lets you:
+CanvasAgent provides two complementary interfaces for working with Canvas LMS:
 
-1. Select a local Ollama LLM model from a dropdown and chat.
-2. Connect to a Canvas LMS test/teacher (Free for Teachers) account via API.
-3. Ask the LLM to perform Canvas actions (list courses, list assignments, download/upload files, etc.).
-4. Download course files locally and upload new files to Canvas.
+1. A Streamlit chat UI (Python) for interactive exploration and natural language Canvas actions.
+2. A Model Context Protocol (MCP) server (TypeScript) exposing safe, structured Canvas tools (assignment creation, rubric attachment, etc.) usable from compatible AI clients (e.g. VS Code Copilot Chat, Claude Desktop).
 
-> NOTE: This is an initial scaffold. Further refinement, authentication hardening, and function/tool grounding for complex multi-step actions can be added incrementally.
+The codebase has been refactored into a clearer structure:
 
-## Features (Initial Scope)
+```text
+python/                 # Python package & Streamlit app
+  canvas_agent/
+    clients/            # Canvas client implementations
+    ... (dispatchers, LLM helpers to migrate)
+mcp-canvas/             # TypeScript MCP server
+  src/                  # Tools & Canvas client wrapper
+```
 
-- Streamlit UI with sidebar for settings
-  - Enter Canvas Base URL & API Token (securely via `st.secrets` or sidebar inputs)
-  - Select Ollama model (auto-detected via `ollama list`)
-- Conversational memory stored in `st.session_state`
-- Canvas helper client wrapping common endpoints (Courses, Assignments, Files)
-- Basic tool functions exposed to the LLM via a simple pattern (non-agentic baseline)
+Legacy root scripts remain temporarily for backward compatibility and will be migrated / deprecated in subsequent passes.
 
-## Roadmap (Suggested Next Steps)
+## Features
 
-- Add function-calling / tool routing (e.g., with OpenAI-compatible schema or custom planner)
-- Add retry & rate limiting logic
-- Add caching of Canvas responses
-- Add multi-user auth & per-user secret storage
-- Add unit tests & CI pipeline
+### Streamlit App
+- Sidebar configuration (Canvas URL/token, Ollama model selection)
+- Enhanced cached Canvas client (rate-limit resilience & simple caching)
+- Natural language intent parsing with optional LLM assistance
+- Quick action buttons (courses, modules, assignments, profile)
+
+### MCP Server (`mcp-canvas`)
+- Standard MCP stdio server (launches via `node dist/index.js`)
+- Tools:
+  - `create_assignment`
+  - `attach_rubric_to_assignment`
+- Robust Canvas REST client with retry, exponential backoff, and typed responses
+- Environment fallback: supports `CANVAS_TOKEN` or legacy `CANVAS_API_TOKEN`
+
+## Roadmap (Next Refactor Steps)
+
+- Finish migrating Python modules into `python/canvas_agent/` package (dispatcher, LLM helpers)
+- Replace duplicate legacy clients with single maintained enhanced client
+- Add tests for MCP tools (mock Canvas responses)
+- Introduce unified configuration loader (Python + Node share .env contract)
+- Optional: Add additional MCP tools (module creation, file upload)
 
 ## Getting a Canvas LMS API Token (Free Teacher Account)
 
@@ -98,20 +114,34 @@ If you store credentials in `.env`, they will be auto-loaded via `python-dotenv`
 - Do NOT commit tokens to git.
 - Add rate limiting or audit logging before production use.
 
-## Project Structure
+## Project Structure (Simplified)
 
 ```text
-app.py                # Streamlit UI & chat loop
-canvas_client.py      # Canvas API wrapper
-llm.py                # Ollama interaction utilities
-actions.py            # Mapping from user intents to Canvas actions
-requirements.txt
-README.md
+python/
+  canvas_agent/
+    __init__.py
+    clients/
+      canvas_client_enhanced.py
+  (legacy root .py scripts to be migrated)
+
+mcp-canvas/
+  src/
+    index.ts            # MCP server entry
+    canvas.ts           # Canvas REST client
+    tools/
+      create_assignment.ts
+      attach_rubric.ts
 ```
 
-## Extending Actions
+Root-level scripts like `app.py`, `app_enhanced.py`, and helpers will gradually move under `python/canvas_agent/`.
 
-Add new functions in `actions.py` that accept `(client, params)` and register them in the ACTIONS dict. Provide a better intent parser or integrate structured function calling.
+## Extending
+
+### Streamlit / Python
+Add new Canvas operations to the enhanced client, then expose them through the dispatcher. For LLM-driven intent parsing, update the system prompt enumeration of supported actions.
+
+### MCP Server
+Create a new tool file under `mcp-canvas/src/tools/`, export a factory returning a `{ name, description, inputSchema, handler }` object, and register it in `index.ts` in the `tools` array.
 
 ## License
 

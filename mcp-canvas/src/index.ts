@@ -1,5 +1,18 @@
 // src/index.ts
 import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
+// Fallback: load parent workspace .env if vars still missing
+if (!process.env.CANVAS_BASE_URL || !(process.env.CANVAS_TOKEN || process.env.CANVAS_API_TOKEN)) {
+  try {
+    const parentEnv = path.resolve(process.cwd(), '..', '.env');
+    if (fs.existsSync(parentEnv)) {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const dotenv = require('dotenv');
+      dotenv.config({ path: parentEnv });
+    }
+  } catch {/* ignore */}
+}
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { 
@@ -13,11 +26,12 @@ import { attachRubricTool } from './tools/attach_rubric';
 
 // Validate environment variables
 const baseUrl = process.env.CANVAS_BASE_URL;
-const token = process.env.CANVAS_TOKEN;
+const token = process.env.CANVAS_TOKEN || process.env.CANVAS_API_TOKEN;
 
 if (!baseUrl || !token) {
-  console.error('Error: CANVAS_BASE_URL and CANVAS_TOKEN environment variables are required');
-  console.error('Please copy .env.example to .env and fill in your Canvas credentials');
+  console.error('Error: Missing Canvas credentials.');
+  console.error('Required: CANVAS_BASE_URL plus CANVAS_TOKEN (or CANVAS_API_TOKEN).');
+  console.error('Populate either mcp-canvas/.env or root .env.');
   process.exit(1);
 }
 
