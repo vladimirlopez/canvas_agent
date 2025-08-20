@@ -21,6 +21,11 @@ class CanvasActionDispatcher:
             'list_assignments': self._list_assignments,
             'create_assignment': self._create_assignment,
             'update_assignment': self._update_assignment,
+            'create_quiz': self._create_quiz,
+            'create_quiz_question': self._create_quiz_question,
+            'list_rubrics': self._list_rubrics,
+            'create_rubric': self._create_rubric,
+            'attach_rubric': self._attach_rubric,
             'list_modules': self._list_modules,
             'create_module': self._create_module,
             'list_module_items': self._list_module_items,
@@ -137,6 +142,27 @@ class CanvasActionDispatcher:
                     update['description'] = desc_match.group(1)
                 if len(update) > 2:
                     return {"action": 'update_assignment', 'params': update}
+
+        # Real quiz creation (Phase 2): detect explicit "real quiz" or "graded quiz"
+        if 'create' in lower and 'quiz' in lower and ('real' in lower or 'graded' in lower):
+            course_id = self._infer_course_id(text, courses_cache)
+            if not course_id:
+                return {"action": None, "params": {}}
+            name_match = re.search(r"quiz (?:named|titled|called) ['\"]([^'\"]+)['\"]", text, re.IGNORECASE)
+            name = name_match.group(1) if name_match else 'New Quiz'
+            points = 0
+            pts = re.search(r"worth (\d+) points", lower)
+            if pts:
+                points = int(pts.group(1))
+            due_at = self._parse_due_date(text)
+            desc = ''
+            about = re.search(r"about ([a-zA-Z0-9 ,.-]{3,120})", text, re.IGNORECASE)
+            if about:
+                desc = f"<p>Quiz about {about.group(1).strip()}</p>"
+            params = {'course_id': course_id, 'name': name, 'description': desc, 'points_possible': points}
+            if due_at:
+                params['due_at'] = due_at
+            return {"action": 'create_quiz', 'params': params}
 
         if 'create' in lower and ('quiz' in lower or 'assignment' in lower):
             # Extract name
@@ -446,6 +472,79 @@ If unclear, return {{"action": null, "params": {{}}}}."""
             return "No updatable fields provided."
         result = self.client.update_assignment(course_id, assignment_id, data)
         return f"Updated assignment {assignment_id}: **{result.get('name','(name)')}**"
+
+    def _create_quiz(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        name = params.get('name')
+        if not course_id or not name:
+            return "Please provide course_id and quiz name."
+        quiz_data = {
+            'quiz[title]': name,
+            'quiz[description]': params.get('description',''),
+            'quiz[quiz_type]': 'assignment',  # graded quiz
+            'quiz[points_possible]': params.get('points_possible', 0),
+            'quiz[published]': True,
+        }
+        if params.get('due_at'):
+            quiz_data['quiz[due_at]'] = params['due_at']
+        result = self.client.create_quiz(course_id, quiz_data)
+        return f"Created quiz: **{result.get('title', name)}** (ID: {result.get('id')})"
+
+    def _create_quiz_question(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        quiz_id = params.get('quiz_id')
+        question_text = params.get('question')
+        if not all([course_id, quiz_id, question_text]):
+            return "Please provide course_id, quiz_id, and question text."
+        answers: List[str] = params.get('answers', [])
+        question_data: Dict[str, Any] = {
+            'question[question_name]': params.get('name','Question'),
+            'question[question_text]': question_text,
+            'question[points_possible]': params.get('points', 1),
+            'question[question_type]': 'multiple_choice_question' if answers else 'short_answer_question'
+        }
+        if answers:
+            for idx, ans in enumerate(answers):
+                question_data[f'question[answers][{idx}][text]'] = ans
+                question_data[f'question[answers][{idx}][weight]'] = 100 if idx == 0 else 0
+        result = self.client.create_quiz_question(course_id, quiz_id, question_data)
+        return f"Added quiz question (ID: {result.get('id')})"
+
+    def _list_rubrics(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        if not course_id:
+            return "Please provide a course ID."
+        rubrics = self.client.list_rubrics(course_id)
+        if not rubrics:
+            return f"No rubrics found for course {course_id}."
+        lines = [f"**{r.get('title','(no title)')}** (ID: {r.get('id')})" for r in rubrics[:20]]
+        return f"**Rubrics for Course {course_id}:**\n" + "\n".join(lines)
+
+    def _create_rubric(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        title = params.get('title')
+        if not course_id or not title:
+            return "Please provide course_id and title."
+        criteria: List[Dict[str, Any]] = params.get('criteria', [])
+        rubric_data: Dict[str, Any] = {
+            'rubric[title]': title,
+            'rubric[free_form_criterion_comments]': 'true'
+        }
+        for idx, c in enumerate(criteria):
+            rubric_data[f'rubric[criteria][{idx}][description]'] = c.get('description','Criterion')
+            rubric_data[f'rubric[criteria][{idx}][points]'] = c.get('points', 1)
+        result = self.client.create_rubric(course_id, rubric_data)
+        return f"Created rubric: **{result.get('title', title)}** (ID: {result.get('id')})"
+
+    def _attach_rubric(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        rubric_id = params.get('rubric_id')
+        association_id = params.get('association_id')
+        association_type = params.get('association_type','Assignment')
+        if not all([course_id, rubric_id, association_id]):
+            return "Please provide course_id, rubric_id, and association_id."
+        result = self.client.attach_rubric(course_id, rubric_id, association_id, association_type)
+        return f"Attached rubric {rubric_id} to {association_type} {association_id} (ID: {result.get('id','?')})"
 
     def _list_modules(self, params: Dict[str, Any]) -> str:
         course_id = params.get('course_id')

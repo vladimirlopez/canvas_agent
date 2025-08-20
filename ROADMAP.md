@@ -128,10 +128,11 @@ Risks & Mitigations
 
 Next Immediate Steps
 --------------------
-1. Implement Phase 1 remaining tasks in code.
-2. Add/update tests.
-3. Document new actions in README.
-4. Plan Phase 2 backlog creation (issue labels).
+1. Finalize Phase 1 checkboxes (mark implemented features as done).
+2. Implement Phase 2 (real quizzes + rubric CRUD + attach).
+3. Add/update tests focusing on quiz/rubric creation heuristics.
+4. Document new actions in README.
+5. Prepare issue labels for future phases.
 
 --
 Maintained: auto-generated initial version (Phase 1 start). Update as tasks complete.

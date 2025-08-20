@@ -195,6 +195,29 @@ class CanvasClientEnhanced:
     def get_user_profile(self, user_id: str = 'self') -> Dict[str, Any]:
         return self._request('GET', f'/api/v1/users/{user_id}/profile')
 
+    # ---- Quizzes (Classic) ---- #
+    def create_quiz(self, course_id: str, quiz_data: Dict[str, Any]) -> Dict[str, Any]:
+        return self._request('POST', f'/api/v1/courses/{course_id}/quizzes', data=quiz_data)
+
+    def create_quiz_question(self, course_id: str, quiz_id: str, question_data: Dict[str, Any]) -> Dict[str, Any]:
+        return self._request('POST', f'/api/v1/courses/{course_id}/quizzes/{quiz_id}/questions', data=question_data)
+
+    # ---- Rubrics ---- #
+    def list_rubrics(self, course_id: str) -> List[Dict[str, Any]]:
+        return self._request('GET', f'/api/v1/courses/{course_id}/rubrics')
+
+    def create_rubric(self, course_id: str, rubric_data: Dict[str, Any]) -> Dict[str, Any]:
+        return self._request('POST', f'/api/v1/courses/{course_id}/rubrics', data=rubric_data)
+
+    def attach_rubric(self, course_id: str, rubric_id: str, association_id: str, association_type: str = 'Assignment', use_for_grading: bool = True) -> Dict[str, Any]:
+        data = {
+            'rubric_association[rubric_id]': rubric_id,
+            'rubric_association[association_id]': association_id,
+            'rubric_association[association_type]': association_type,
+            'rubric_association[use_for_grading]': 'true' if use_for_grading else 'false'
+        }
+        return self._request('POST', f'/api/v1/courses/{course_id}/rubric_associations', data=data)
+
     def clear_cache(self) -> None:
         self.cache.clear()
         logger.info("Cache cleared")
