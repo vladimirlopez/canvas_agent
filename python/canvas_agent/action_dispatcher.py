@@ -1,10 +1,11 @@
 """Enhanced action dispatcher with Canvas API coverage and LLM integration (refactored)."""
 from __future__ import annotations
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from .canvas_client_enhanced import CanvasClientEnhanced
 from .llm_enhanced import ollama_chat_api
 import json
 import re
+from datetime import datetime, timedelta
 
 class CanvasActionDispatcher:
     def __init__(self, client: CanvasClientEnhanced, llm_model: str | None = None):
@@ -29,6 +30,15 @@ class CanvasActionDispatcher:
         }
 
     def execute_natural_language_request(self, user_request: str, courses_cache: List[Dict] | None = None) -> str:
+        # First attempt a fast deterministic parse for common creation intents (quiz/assignment)
+        fast = self._fast_intent_parse(user_request, courses_cache)
+        if fast.get('action'):
+            action = fast['action']
+            try:
+                return self.action_registry[action](fast.get('params', {}))
+            except Exception as e:  # pragma: no cover
+                return f"Error executing {action}: {e}"
+
         intent_result = self._parse_intent_with_llm(user_request, courses_cache) if courses_cache is not None else {"action": None, "params": {}}
         action = intent_result.get('action')
         if action and action in self.action_registry:
@@ -38,6 +48,122 @@ class CanvasActionDispatcher:
                 return f"Error executing {action}: {e}"
         return self._handle_conversational_request(user_request)
 
+    # --------- Fast Heuristic Parsing (pre-LLM) --------- #
+    def _fast_intent_parse(self, text: str, courses_cache: Optional[List[Dict]]) -> Dict[str, Any]:
+        """Handle high-friction intents quickly (like user insisting on quiz creation).
+
+        We map 'quiz' to an assignment (since Quizzes API not implemented yet) and embed
+        the question into the description. Supports patterns like:
+          "create a quiz named 'Quiz 1' with one multiple choice question asking '...'
+           and answers are 'Yes' and 'No' worth 10 points due next Friday in course 123"
+        """
+        lower = text.lower()
+        if 'create' in lower and ('quiz' in lower or 'assignment' in lower):
+            # Extract name
+            name_match = re.search(r"named\s+'([^']+)'|called\s+'([^']+)'|named\s+([\w \-]+)|called\s+([\w \-]+)", text, re.IGNORECASE)
+            name = None
+            if name_match:
+                for grp in name_match.groups():
+                    if grp:
+                        name = grp.strip().strip('"')
+                        break
+            # Fallback generic name
+            if not name:
+                name = 'Untitled Quiz'
+
+            # Extract points
+            points = 100
+            pts_match = re.search(r"worth\s+(\d+)\s+points", lower)
+            if pts_match:
+                try:
+                    points = int(pts_match.group(1))
+                except ValueError:
+                    pass
+
+            # Extract question & answers (simple heuristic)
+            question_match = re.search(r"question (?:asking|:)?\s*'([^']+)'|question (?:asking|:)?\s*\"([^\"]+)\"", text, re.IGNORECASE)
+            question = None
+            if question_match:
+                question = next((g for g in question_match.groups() if g), None)
+            if not question:
+                # Another pattern: with one multiple choice question (.*?) and answers are
+                q2 = re.search(r"multiple choice question .*?['\"]([^'\"]+)['\"]", text, re.IGNORECASE)
+                if q2:
+                    question = q2.group(1)
+            answers_match = re.search(r"answers? (?:are|:)\s*(['\"]?[^\n]+)", text, re.IGNORECASE)
+            answers_raw = None
+            if answers_match:
+                answers_raw = answers_match.group(1)
+            choices: List[str] = []
+            if answers_raw:
+                # Split on common delimiters
+                for token in re.split(r"[,/]|\bor\b|\band\b", answers_raw):
+                    t = token.strip().strip("'\"")
+                    if t:
+                        choices.append(t)
+            # Provide a simple description embedding the question
+            description_parts = ["Auto-created via CanvasAgent."]
+            if question:
+                description_parts.append(f"<p><strong>Question:</strong> {question}</p>")
+            if choices:
+                description_parts.append("<ul>" + "".join(f"<li>{c}</li>" for c in choices) + "</ul>")
+            description = "\n".join(description_parts)
+
+            # Extract course id or name
+            course_id = self._infer_course_id(text, courses_cache)
+            if not course_id:
+                return {"action": None, "params": {}}
+
+            # Due date basic parse (supports 'next friday')
+            due_at_iso = None
+            if 'next friday' in lower:
+                due_at_iso = self._next_weekday_iso(4)  # 0=Mon ... 4=Fri
+            due_match = re.search(r"due (\d{4}-\d{2}-\d{2})", lower)
+            if due_match:
+                due_at_iso = due_match.group(1) + "T23:59:00Z"
+
+            params = {
+                'course_id': course_id,
+                'name': name,
+                'description': description,
+                'points_possible': points,
+            }
+            if due_at_iso:
+                params['due_at'] = due_at_iso
+            return {"action": 'create_assignment', 'params': params}
+        return {"action": None, "params": {}}
+
+    def _infer_course_id(self, text: str, courses_cache: Optional[List[Dict]]) -> Optional[str]:
+        if not courses_cache:
+            return None
+        # Look for explicit numeric id
+        id_match = re.search(r"course\s+(\d+)", text, re.IGNORECASE)
+        if id_match:
+            return id_match.group(1)
+        # Match by name fragment
+        lower = text.lower()
+        for c in courses_cache:
+            name = str(c.get('name',''))
+            if name and name.lower() in lower:
+                return str(c.get('id'))
+            # Also match camel-case break or code
+            code = str(c.get('course_code',''))
+            if code and code.lower() in lower:
+                return str(c.get('id'))
+        # If only one course, assume it
+        if len(courses_cache) == 1:
+            return str(courses_cache[0].get('id'))
+        return None
+
+    def _next_weekday_iso(self, target_weekday: int) -> str:
+        today = datetime.utcnow().date()
+        days_ahead = (target_weekday - today.weekday() + 7) % 7
+        if days_ahead == 0:
+            days_ahead = 7
+        due_date = today + timedelta(days=days_ahead)
+        # Set default due time to 23:59 UTC
+        return due_date.isoformat() + 'T23:59:00Z'
+
     def _parse_intent_with_llm(self, user_request: str, courses_cache: List[Dict] | None) -> Dict[str, Any]:
         if not self.llm_model:
             return {"action": None, "params": {}}
@@ -45,6 +171,7 @@ class CanvasActionDispatcher:
         if courses_cache:
             course_context = "Available courses:\n" + "\n".join([f"- {c.get('id')}: {c.get('name')}" for c in courses_cache[:10]])
         system_prompt = f"""You are a Canvas LMS action parser. Parse the user's request and return JSON with action and parameters.
+If the user says 'quiz' you should normally map it to create_assignment (we are using assignments as lightweight quizzes unless explicitly given a real quiz API context). Extract name, points, and if they supply a simple multiple choice question with answers, put it in the description HTML list.
 Available actions and required parameters:
 - list_courses: {{}}
 - get_course_info: {{"course_id": "123"}}
