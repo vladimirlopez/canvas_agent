@@ -29,6 +29,7 @@ IF NOT EXIST .env (
 )
 
 echo [Run] Starting Streamlit (Ctrl+C to stop)...
-.venv\Scripts\python -m streamlit run app.py
+REM Updated to packaged Streamlit entrypoint
+.venv\Scripts\python -m streamlit run python/canvas_agent/apps/streamlit_app.py
 
 pause

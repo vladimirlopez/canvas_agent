@@ -3,6 +3,8 @@
 Create a Week 1 module in the LLMTest course
 """
 
+# DEPRECATED: Use python/scripts/create_week1_module.py instead.
+
 import os
 from dotenv import load_dotenv
 from canvas_client_enhanced import CanvasClientEnhanced

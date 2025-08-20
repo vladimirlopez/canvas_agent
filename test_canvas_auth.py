@@ -69,3 +69,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# DEPRECATED: use python/scripts/test_canvas_auth.py instead.

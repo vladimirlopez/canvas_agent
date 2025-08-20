@@ -62,3 +62,5 @@ def test_canvas_permissions():
 
 if __name__ == "__main__":
     test_canvas_permissions()
+
+# DEPRECATED: use python/scripts/test_permissions.py instead.

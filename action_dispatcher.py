@@ -1,3 +1,6 @@
+# DEPRECATED: This file has been moved to python/canvas_agent/action_dispatcher.py
+# Retained temporarily; please import from canvas_agent.action_dispatcher instead.
+
 """Enhanced action dispatcher with better Canvas API coverage and LLM integration."""
 from typing import Dict, Any, List, Optional
 from canvas_client_enhanced import CanvasClientEnhanced

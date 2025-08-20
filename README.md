@@ -16,17 +16,19 @@ mcp-canvas/             # TypeScript MCP server
   src/                  # Tools & Canvas client wrapper
 ```
 
-Legacy root scripts remain temporarily for backward compatibility and will be migrated / deprecated in subsequent passes.
+Legacy root scripts have been removed in favor of the packaged layout. Use the packaged Streamlit app under `python/canvas_agent/apps/streamlit_app.py`.
 
 ## Features
 
 ### Streamlit App
+
 - Sidebar configuration (Canvas URL/token, Ollama model selection)
 - Enhanced cached Canvas client (rate-limit resilience & simple caching)
 - Natural language intent parsing with optional LLM assistance
 - Quick action buttons (courses, modules, assignments, profile)
 
 ### MCP Server (`mcp-canvas`)
+
 - Standard MCP stdio server (launches via `node dist/index.js`)
 - Tools:
   - `create_assignment`
@@ -85,16 +87,16 @@ You can copy `secrets.example.toml` to `.streamlit/secrets.toml` and edit.
 
 ```powershell
 python -m venv .venv
-.venv\Scripts\Activate.ps1
+. .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-streamlit run app.py
+streamlit run python/canvas_agent/apps/streamlit_app.py
 ```
 
 If you store credentials in `.env`, they will be auto-loaded via `python-dotenv` (included in requirements).
 
 ## Usage Flow
 
-1. Start the app.
+1. Start the app (`streamlit run python/canvas_agent/apps/streamlit_app.py`).
 2. In the sidebar, confirm the detected Ollama models list. Select one.
 3. Enter (or rely on loaded) Canvas Base URL & API Token.
 4. Type a prompt like: "list courses" or "list assignments 123".
@@ -133,7 +135,7 @@ mcp-canvas/
       attach_rubric.ts
 ```
 
-Root-level scripts like `app.py`, `app_enhanced.py`, and helpers will gradually move under `python/canvas_agent/`.
+Legacy root-level scripts have been removed; the maintained code lives inside the `python/canvas_agent` package.
 
 ## Extending
 

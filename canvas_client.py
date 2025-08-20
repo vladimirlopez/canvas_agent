@@ -2,6 +2,7 @@ import os
 import requests
 from typing import Optional, Dict, Any, List
 
+# DEPRECATED: Use canvas_agent.canvas_client_enhanced.CanvasClientEnhanced instead.
 class CanvasClient:
     def __init__(self, base_url: str, api_token: str):
         self.base_url = base_url.rstrip('/')

@@ -1,3 +1,6 @@
+# DEPRECATED: moved to python/canvas_agent/llm_enhanced.py
+# Import from canvas_agent.llm_enhanced instead.
+
 """Enhanced LLM integration using Ollama API for better conversational flow."""
 import subprocess
 import json

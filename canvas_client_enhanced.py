@@ -1,3 +1,6 @@
+# DEPRECATED: moved to python/canvas_agent/canvas_client_enhanced.py
+# Import from canvas_agent.canvas_client_enhanced instead.
+
 """Enhanced Canvas client with error handling, caching, and better API coverage."""
 import os
 import requests

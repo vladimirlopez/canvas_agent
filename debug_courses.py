@@ -115,3 +115,5 @@ def test_courses_detailed():
 
 if __name__ == "__main__":
     test_courses_detailed()
+
+# DEPRECATED: Use python/scripts/debug_courses.py instead.
