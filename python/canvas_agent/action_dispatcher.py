@@ -115,10 +115,27 @@ class CanvasActionDispatcher:
                 q2 = re.search(r"multiple choice question .*?['\"]([^'\"]+)['\"]", text, re.IGNORECASE)
                 if q2:
                     question = q2.group(1)
+            # Topic-only phrasing: "quiz for tomorrow about inertia ..."
+            if not question:
+                about_match = re.search(r"about\s+([a-zA-Z0-9 \-]+?)(?:\s+with|\s+worth|\s+answers|$)", text, re.IGNORECASE)
+                if about_match:
+                    topic = about_match.group(1).strip().strip('.').title()
+                    question = f"Quick check on {topic}"  # Placeholder question derived from topic
+                    # If name is still generic, improve it using topic
+                    if name == 'Untitled Quiz':
+                        name = f"Quiz {topic}"[:60]
             answers_match = re.search(r"answers? (?:are|:)\s*(['\"]?[^\n]+)", text, re.IGNORECASE)
             answers_raw = None
             if answers_match:
                 answers_raw = answers_match.group(1)
+            if not answers_raw:
+                # Support pattern without 'are' or ':' e.g. "answers yes,no" or "answers yes, no"
+                answers_simple = re.search(r"answers\s+([^\n]+)", text, re.IGNORECASE)
+                if answers_simple:
+                    # Stop at common trailing words
+                    temp = answers_simple.group(1)
+                    temp = re.split(r"\s+due\b|\s+worth\b|\s+points?\b", temp)[0]
+                    answers_raw = temp.strip()
             choices: List[str] = []
             if answers_raw:
                 # Split on common delimiters
