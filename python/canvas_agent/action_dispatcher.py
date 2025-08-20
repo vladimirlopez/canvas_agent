@@ -11,6 +11,8 @@ class CanvasActionDispatcher:
     def __init__(self, client: CanvasClientEnhanced, llm_model: str | None = None):
         self.client = client
         self.llm_model = llm_model
+        # Track last created assignment for follow-up commands like "add the quiz to module 1"
+        self._last_created_assignment: Dict[str, Any] | None = None
         self.action_registry = {
             'list_courses': self._list_courses,
             'get_course_info': self._get_course_info,
@@ -58,6 +60,21 @@ class CanvasActionDispatcher:
            and answers are 'Yes' and 'No' worth 10 points due next Friday in course 123"
         """
         lower = text.lower()
+
+        # Heuristic: add last created quiz/assignment to a module
+        if ('add' in lower or 'put' in lower) and ('quiz' in lower or 'assignment' in lower) and 'module' in lower and 'to module' in lower:
+            mod_match = re.search(r"module\s+(\d+)", lower)
+            if mod_match and self._last_created_assignment:
+                module_id = mod_match.group(1)
+                params = {
+                    'course_id': self._last_created_assignment.get('course_id'),
+                    'module_id': module_id,
+                    'title': self._last_created_assignment.get('name', 'Assignment'),
+                    'type': 'Assignment',
+                    'content_id': self._last_created_assignment.get('id')
+                }
+                return {"action": 'add_module_item', 'params': params}
+
         if 'create' in lower and ('quiz' in lower or 'assignment' in lower):
             # Extract name
             name_match = re.search(r"named\s+'([^']+)'|called\s+'([^']+)'|named\s+([\w \-]+)|called\s+([\w \-]+)", text, re.IGNORECASE)
@@ -67,6 +84,14 @@ class CanvasActionDispatcher:
                     if grp:
                         name = grp.strip().strip('"')
                         break
+            # Pattern: quiz 1 / quiz one
+            if not name:
+                simple_quiz = re.search(r"quiz\s+([\w\-]+)", lower)
+                if simple_quiz:
+                    token = simple_quiz.group(1)
+                    # Avoid capturing generic words like 'with' or 'for'
+                    if token not in {'with','for','about','on','in'}:
+                        name = f"Quiz {token.title()}" if not token.lower().startswith('quiz') else token.title()
             # Fallback generic name
             if not name:
                 name = 'Untitled Quiz'
@@ -114,10 +139,12 @@ class CanvasActionDispatcher:
             if not course_id:
                 return {"action": None, "params": {}}
 
-            # Due date basic parse (supports 'next friday')
+            # Due date basic parse (supports 'next friday', 'tomorrow')
             due_at_iso = None
             if 'next friday' in lower:
                 due_at_iso = self._next_weekday_iso(4)  # 0=Mon ... 4=Fri
+            if 'tomorrow' in lower:
+                due_at_iso = (datetime.utcnow().date() + timedelta(days=1)).isoformat() + 'T23:59:00Z'
             due_match = re.search(r"due (\d{4}-\d{2}-\d{2})", lower)
             if due_match:
                 due_at_iso = due_match.group(1) + "T23:59:00Z"
@@ -255,7 +282,15 @@ If unclear, return {{"action": null, "params": {{}}}}."""
             'assignment[points_possible]': params.get('points_possible', 100),
             'assignment[published]': True,
         }
+        if params.get('due_at'):
+            assignment_data['assignment[due_at]'] = params['due_at']
         result = self.client.create_assignment(course_id, assignment_data)
+        # Track last created assignment for follow-up actions
+        self._last_created_assignment = {
+            'id': result.get('id'),
+            'course_id': course_id,
+            'name': result.get('name')
+        }
         return f"Created assignment: **{result.get('name')}** (ID: {result.get('id')})"
 
     def _list_modules(self, params: Dict[str, Any]) -> str:
@@ -288,7 +323,24 @@ If unclear, return {{"action": null, "params": {{}}}}."""
         return f"**Items in Module {module_id}:**\n" + "\n".join(lines)
 
     def _add_module_item(self, params: Dict[str, Any]) -> str:
-        return "Add module item not implemented in refactored subset"
+        course_id = params.get('course_id')
+        module_id = params.get('module_id')
+        title = params.get('title')
+        item_type = params.get('type', 'Assignment')
+        content_id = params.get('content_id')
+        if not all([course_id, module_id, title, item_type]):
+            return "Please provide course_id, module_id, title, and type."
+        data: Dict[str, Any] = {
+            'module_item[type]': item_type,
+            'module_item[title]': title,
+        }
+        if content_id:
+            data['module_item[content_id]'] = content_id
+        try:
+            result = self.client.create_module_item(course_id, module_id, data)
+            return f"Added module item: **{result.get('title', title)}** to module {module_id}"
+        except Exception as e:
+            return f"Failed to add module item: {e}"
 
     def _list_files(self, params: Dict[str, Any]) -> str:
         course_id = params.get('course_id')
