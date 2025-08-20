@@ -5,10 +5,12 @@ Test Canvas API authentication with different URLs
 
 import requests
 import os
+import pytest
 from dotenv import load_dotenv
 
 load_dotenv()
 
+@pytest.mark.skipif(not os.getenv('CANVAS_AUTH_TEST'), reason='Set CANVAS_AUTH_TEST=1 to run live Canvas auth test')
 def test_canvas_auth(base_url, token):
     """Test Canvas API authentication"""
     headers = {"Authorization": f"Bearer {token}"}

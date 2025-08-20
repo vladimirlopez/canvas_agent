@@ -20,11 +20,15 @@ class CanvasActionDispatcher:
             'unpublish_course': self._unpublish_course,
             'list_assignments': self._list_assignments,
             'create_assignment': self._create_assignment,
+            'update_assignment': self._update_assignment,
             'list_modules': self._list_modules,
             'create_module': self._create_module,
             'list_module_items': self._list_module_items,
             'add_module_item': self._add_module_item,
             'list_files': self._list_files,
+            'upload_file': self._upload_file,
+            'list_pages': self._list_pages,
+            'create_page': self._create_page,
             'list_announcements': self._list_announcements,
             'create_announcement': self._create_announcement,
             'list_students': self._list_students,
@@ -74,6 +78,65 @@ class CanvasActionDispatcher:
                     'content_id': self._last_created_assignment.get('id')
                 }
                 return {"action": 'add_module_item', 'params': params}
+
+        # Page creation heuristic
+        if 'create' in lower and 'page' in lower:
+            # Title extraction
+            title_match = re.search(r"page (?:titled|called|named) '([^']+)'|page (?:titled|called|named) \"([^\"]+)\"", text, re.IGNORECASE)
+            title = None
+            if title_match:
+                title = next((g for g in title_match.groups() if g), None)
+            if not title:
+                # Fallback: "create a page X" capturing next few words until stop words
+                simple_title = re.search(r"create (?:a |one )?page ([a-zA-Z0-9 \-]{3,60})", lower)
+                if simple_title:
+                    cand = simple_title.group(1).strip()
+                    cand = re.split(r" about | with | for | in course | on ", cand)[0]
+                    title = cand.title()
+            # Body content from 'about <topic>' or 'with content <...>'
+            body = "<p>Created via CanvasAgent.</p>"
+            about_match = re.search(r"about ([a-zA-Z0-9 ,.-]{3,120})", text, re.IGNORECASE)
+            if about_match:
+                topic = about_match.group(1).strip().rstrip('.')
+                body += f"<p>{topic}</p>"
+            content_match = re.search(r"with content ['\"]([^'\"]+)['\"]", text, re.IGNORECASE)
+            if content_match:
+                body += f"<p>{content_match.group(1)}</p>"
+            course_id = self._infer_course_id(text, courses_cache)
+            if not course_id:
+                return {"action": None, "params": {}}
+            if not title:
+                title = "New Page"
+            return {"action": 'create_page', 'params': {'course_id': course_id, 'title': title, 'body': body}}
+
+        # File upload heuristic
+        if ('upload' in lower or 'add' in lower) and 'file' in lower:
+            # Look for explicit filename (common extensions)
+            file_match = re.search(r"file ([\w\-.]+\.(?:pdf|docx?|pptx?|xlsx?|csv|txt|md|png|jpg|jpeg))", lower)
+            if file_match:
+                filename = file_match.group(1)
+                course_id = self._infer_course_id(text, courses_cache)
+                if not course_id:
+                    return {"action": None, "params": {}}
+                return {"action": 'upload_file', 'params': {'course_id': course_id, 'filepath': filename}}
+
+        if 'update' in lower and 'assignment' in lower:
+            # Update assignment (due date or description)
+            assign_id_match = re.search(r"assignment (\d+)", lower)
+            if assign_id_match:
+                assignment_id = assign_id_match.group(1)
+                course_id = self._infer_course_id(text, courses_cache)
+                if not course_id:
+                    return {"action": None, "params": {}}
+                due_at = self._parse_due_date(text)
+                desc_match = re.search(r"description to ['\"]([^'\"]+)['\"]", text, re.IGNORECASE)
+                update: Dict[str, Any] = {'course_id': course_id, 'assignment_id': assignment_id}
+                if due_at:
+                    update['due_at'] = due_at
+                if desc_match:
+                    update['description'] = desc_match.group(1)
+                if len(update) > 2:
+                    return {"action": 'update_assignment', 'params': update}
 
         if 'create' in lower and ('quiz' in lower or 'assignment' in lower):
             # Extract name
@@ -156,15 +219,8 @@ class CanvasActionDispatcher:
             if not course_id:
                 return {"action": None, "params": {}}
 
-            # Due date basic parse (supports 'next friday', 'tomorrow')
-            due_at_iso = None
-            if 'next friday' in lower:
-                due_at_iso = self._next_weekday_iso(4)  # 0=Mon ... 4=Fri
-            if 'tomorrow' in lower:
-                due_at_iso = (datetime.utcnow().date() + timedelta(days=1)).isoformat() + 'T23:59:00Z'
-            due_match = re.search(r"due (\d{4}-\d{2}-\d{2})", lower)
-            if due_match:
-                due_at_iso = due_match.group(1) + "T23:59:00Z"
+            # Due date advanced parse
+            due_at_iso = self._parse_due_date(text)
 
             params = {
                 'course_id': course_id,
@@ -176,6 +232,70 @@ class CanvasActionDispatcher:
                 params['due_at'] = due_at_iso
             return {"action": 'create_assignment', 'params': params}
         return {"action": None, "params": {}}
+
+    def _parse_due_date(self, text: str) -> Optional[str]:
+        """Parse a variety of simple natural language due date expressions.
+
+        Supported examples:
+          - next friday
+          - tomorrow
+          - in 2 days / in 3 weeks
+          - due 2025-09-05
+          - next monday 5pm
+          - in 10 days at 4pm
+        Returns ISO8601 UTC with fallback time 23:59Z if time omitted.
+        """
+        lower = text.lower()
+        # Explicit date
+        date_match = re.search(r"(\d{4}-\d{2}-\d{2})", lower)
+        base_date: Optional[datetime] = None
+        if date_match:
+            try:
+                base_date = datetime.strptime(date_match.group(1), '%Y-%m-%d')
+            except ValueError:
+                pass
+        # relative 'tomorrow'
+        if 'tomorrow' in lower:
+            base_date = datetime.utcnow() + timedelta(days=1)
+        # next weekday
+        weekdays = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
+        for idx, wd in enumerate(weekdays):
+            if f"next {wd}" in lower:
+                base_date = datetime.utcnow()
+                days_ahead = (idx - base_date.weekday() + 7) % 7
+                if days_ahead == 0:
+                    days_ahead = 7
+                base_date = base_date + timedelta(days=days_ahead)
+                break
+        # in N days/weeks
+        rel_match = re.search(r"in (\d+) (day|days|week|weeks)", lower)
+        if rel_match:
+            qty = int(rel_match.group(1))
+            unit = rel_match.group(2)
+            delta_days = qty * (7 if unit.startswith('week') else 1)
+            base_date = datetime.utcnow() + timedelta(days=delta_days)
+        if not base_date:
+            return None
+        # time component
+        time_match = re.search(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", lower)
+        hour = 23
+        minute = 59
+        if time_match:
+            hour = int(time_match.group(1))
+            minute = int(time_match.group(2)) if time_match.group(2) else 0
+            ampm = time_match.group(3)
+            if ampm:
+                if ampm == 'pm' and hour < 12:
+                    hour += 12
+                if ampm == 'am' and hour == 12:
+                    hour = 0
+            # Basic sanity
+            if hour > 23:
+                hour = 23
+            if minute > 59:
+                minute = 59
+        dt = datetime(base_date.year, base_date.month, base_date.day, hour, minute)
+        return dt.strftime('%Y-%m-%dT%H:%M:00Z')
 
     def _infer_course_id(self, text: str, courses_cache: Optional[List[Dict]]) -> Optional[str]:
         if not courses_cache:
@@ -310,6 +430,23 @@ If unclear, return {{"action": null, "params": {{}}}}."""
         }
         return f"Created assignment: **{result.get('name')}** (ID: {result.get('id')})"
 
+    def _update_assignment(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        assignment_id = params.get('assignment_id')
+        if not course_id or not assignment_id:
+            return "Please provide course_id and assignment_id."
+        data: Dict[str, Any] = {}
+        if 'name' in params:
+            data['assignment[name]'] = params['name']
+        if 'description' in params:
+            data['assignment[description]'] = params['description']
+        if 'due_at' in params:
+            data['assignment[due_at]'] = params['due_at']
+        if not data:
+            return "No updatable fields provided."
+        result = self.client.update_assignment(course_id, assignment_id, data)
+        return f"Updated assignment {assignment_id}: **{result.get('name','(name)')}**"
+
     def _list_modules(self, params: Dict[str, Any]) -> str:
         course_id = params.get('course_id')
         if not course_id:
@@ -368,6 +505,36 @@ If unclear, return {{"action": null, "params": {{}}}}."""
             return f"No files found for course {course_id}."
         lines = [f"**{f.get('filename')}** (ID: {f.get('id')}) - {f.get('size', 0)} bytes" for f in files[:20]]
         return f"**Files for Course {course_id}:**\n" + "\n".join(lines)
+
+    def _upload_file(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        filepath = params.get('filepath')
+        if not course_id or not filepath:
+            return "Please provide course_id and filepath (local filename)."
+        try:
+            result = self.client.upload_file(course_id, filepath)
+            return f"Uploaded file: **{result.get('display_name', result.get('filename', filepath))}** (ID: {result.get('id')})"
+        except Exception as e:
+            return f"Failed to upload file: {e}"
+
+    def _list_pages(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        if not course_id:
+            return "Please provide a course ID."
+        pages = self.client.list_pages(course_id)
+        if not pages:
+            return f"No pages found for course {course_id}."
+        lines = [f"**{p.get('title')}** (URL: {p.get('url')})" for p in pages[:20]]
+        return f"**Pages for Course {course_id}:**\n" + "\n".join(lines)
+
+    def _create_page(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        title = params.get('title')
+        body = params.get('body','')
+        if not course_id or not title:
+            return "Please provide course_id and title."
+        result = self.client.create_page(course_id, title, body)
+        return f"Created page: **{result.get('title', title)}**"
 
     def _list_announcements(self, params: Dict[str, Any]) -> str:
         course_id = params.get('course_id')

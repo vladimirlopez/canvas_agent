@@ -102,6 +102,13 @@ class CanvasClientEnhanced:
     def create_assignment(self, course_id: str, assignment_data: Dict[str, Any]) -> Dict[str, Any]:
         return self._request('POST', f'/api/v1/courses/{course_id}/assignments', data=assignment_data)
 
+    def update_assignment(self, course_id: str, assignment_id: str, assignment_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an existing assignment.
+
+        assignment_data expects Canvas style keys, e.g. {'assignment[name]': 'New Name'}
+        """
+        return self._request('PUT', f'/api/v1/courses/{course_id}/assignments/{assignment_id}', data=assignment_data)
+
     def list_modules(self, course_id: str, include: List[str] | None = None) -> List[Dict[str, Any]]:
         params: Dict[str, Any] = {}
         if include:
@@ -124,6 +131,56 @@ class CanvasClientEnhanced:
 
     def list_files(self, course_id: str) -> List[Dict[str, Any]]:
         return self._request('GET', f'/api/v1/courses/{course_id}/files')
+
+    # ---- Pages (Wiki Pages) ---- #
+    def list_pages(self, course_id: str) -> List[Dict[str, Any]]:
+        return self._request('GET', f'/api/v1/courses/{course_id}/pages')
+
+    def create_page(self, course_id: str, title: str, body: str, publish: bool = True) -> Dict[str, Any]:
+        data = {
+            'wiki_page[title]': title,
+            'wiki_page[body]': body,
+            'wiki_page[published]': 'true' if publish else 'false'
+        }
+        return self._request('POST', f'/api/v1/courses/{course_id}/pages', data=data)
+
+    # ---- File Upload (simplified two-step) ---- #
+    def initiate_file_upload(self, course_id: str, filename: str, size: int, content_type: str = 'application/octet-stream', parent_folder_path: str | None = None) -> Dict[str, Any]:
+        data: Dict[str, Any] = {
+            'name': filename,
+            'size': str(size),
+            'content_type': content_type,
+            'on_duplicate': 'rename'
+        }
+        if parent_folder_path:
+            data['parent_folder_path'] = parent_folder_path
+        return self._request('POST', f'/api/v1/courses/{course_id}/files', data=data, use_cache=False)
+
+    def upload_file(self, course_id: str, filepath: str, parent_folder_path: str | None = None) -> Dict[str, Any]:
+        """Upload a file to the course. NOTE: Minimal implementation; does not stream large files.
+
+        Steps:
+        1. Initiate upload to get upload_url & params
+        2. POST the binary to the upload_url
+        3. Canvas returns a JSON including attachment info
+        """
+        import os
+        if not os.path.isfile(filepath):  # pragma: no cover (simple guard)
+            raise FileNotFoundError(filepath)
+        size = os.path.getsize(filepath)
+        filename = os.path.basename(filepath)
+        init = self.initiate_file_upload(course_id, filename, size, parent_folder_path=parent_folder_path)
+        upload_url = init.get('upload_url')
+        upload_params = init.get('upload_params', {})
+        if not upload_url:
+            raise RuntimeError('Failed to obtain upload_url from Canvas')
+        with open(filepath, 'rb') as f:
+            files = {'file': (filename, f, upload_params.get('content_type', 'application/octet-stream'))}
+            response = requests.post(upload_url, data=upload_params, files=files)
+            response.raise_for_status()
+            result = response.json()
+            # Some Canvas instances wrap the attachment under 'attachment'
+            return result.get('attachment', result)
 
     def list_announcements(self, course_id: str) -> List[Dict[str, Any]]:
         return self._request('GET', f'/api/v1/courses/{course_id}/discussion_topics', params={'only_announcements': True})
