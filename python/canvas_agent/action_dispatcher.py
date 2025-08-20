@@ -5,7 +5,7 @@ from .canvas_client_enhanced import CanvasClientEnhanced
 from .llm_enhanced import ollama_chat_api
 import json
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 class CanvasActionDispatcher:
     def __init__(self, client: CanvasClientEnhanced, llm_model: str | None = None):
@@ -159,9 +159,36 @@ class CanvasActionDispatcher:
             about = re.search(r"about ([a-zA-Z0-9 ,.-]{3,120})", text, re.IGNORECASE)
             if about:
                 desc = f"<p>Quiz about {about.group(1).strip()}</p>"
+            # Extract optional single question and answers
+            q_match = re.search(r"question ['\"]([^'\"]+)['\"]", text, re.IGNORECASE)
+            question = q_match.group(1).strip() if q_match else None
+            answers: List[str] = []
+            ans_match = re.search(r"answers? (?:are|:)?\s*([^\n]+)", text, re.IGNORECASE)
+            if ans_match:
+                raw = ans_match.group(1)
+                raw = re.split(r"\s+rubric\b|\s+with criteria\b", raw)[0]
+                for token in re.split(r"[,/]|\bor\b|\band\b", raw):
+                    t = token.strip().strip("'\"")
+                    if t:
+                        answers.append(t)
+            # Rubric criteria parsing: rubric with criteria Clarity 5, Accuracy 5
+            rubric_criteria: List[Dict[str, Any]] = []
+            rub_block = re.search(r"rubric with criteria (.+)", lower)
+            if rub_block:
+                crit_text = rub_block.group(1)
+                for piece in re.split(r"[,;]", crit_text):
+                    m = re.search(r"([a-zA-Z0-9 \-]{2,60})\s+(\d+)", piece.strip())
+                    if m:
+                        rubric_criteria.append({'description': m.group(1).strip().title(), 'points': int(m.group(2))})
             params = {'course_id': course_id, 'name': name, 'description': desc, 'points_possible': points}
             if due_at:
                 params['due_at'] = due_at
+            if question:
+                params['question'] = question
+            if answers:
+                params['answers'] = answers
+            if rubric_criteria:
+                params['rubric_criteria'] = rubric_criteria
             return {"action": 'create_quiz', 'params': params}
 
         if 'create' in lower and ('quiz' in lower or 'assignment' in lower):
@@ -282,12 +309,12 @@ class CanvasActionDispatcher:
                 pass
         # relative 'tomorrow'
         if 'tomorrow' in lower:
-            base_date = datetime.utcnow() + timedelta(days=1)
+            base_date = datetime.now(timezone.utc) + timedelta(days=1)
         # next weekday
         weekdays = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
         for idx, wd in enumerate(weekdays):
             if f"next {wd}" in lower:
-                base_date = datetime.utcnow()
+                base_date = datetime.now(timezone.utc)
                 days_ahead = (idx - base_date.weekday() + 7) % 7
                 if days_ahead == 0:
                     days_ahead = 7
@@ -299,7 +326,7 @@ class CanvasActionDispatcher:
             qty = int(rel_match.group(1))
             unit = rel_match.group(2)
             delta_days = qty * (7 if unit.startswith('week') else 1)
-            base_date = datetime.utcnow() + timedelta(days=delta_days)
+            base_date = datetime.now(timezone.utc) + timedelta(days=delta_days)
         if not base_date:
             return None
         # time component
@@ -320,7 +347,7 @@ class CanvasActionDispatcher:
                 hour = 23
             if minute > 59:
                 minute = 59
-        dt = datetime(base_date.year, base_date.month, base_date.day, hour, minute)
+        dt = datetime(base_date.year, base_date.month, base_date.day, hour, minute, tzinfo=timezone.utc)
         return dt.strftime('%Y-%m-%dT%H:%M:00Z')
 
     def _infer_course_id(self, text: str, courses_cache: Optional[List[Dict]]) -> Optional[str]:
@@ -346,7 +373,7 @@ class CanvasActionDispatcher:
         return None
 
     def _next_weekday_iso(self, target_weekday: int) -> str:
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         days_ahead = (target_weekday - today.weekday() + 7) % 7
         if days_ahead == 0:
             days_ahead = 7
@@ -488,18 +515,45 @@ If unclear, return {{"action": null, "params": {{}}}}."""
         if params.get('due_at'):
             quiz_data['quiz[due_at]'] = params['due_at']
         result = self.client.create_quiz(course_id, quiz_data)
-        return f"Created quiz: **{result.get('title', name)}** (ID: {result.get('id')})"
+        output = [f"Created quiz: **{result.get('title', name)}** (ID: {result.get('id')})"]
+        # Auto add question if provided
+        if 'question' in params:
+            q_payload = self._build_question_payload({
+                'name': 'Auto Question',
+                'question': params['question'],
+                'answers': params.get('answers', []),
+                'points': params.get('points_possible', 1)
+            })
+            try:
+                q_res = self.client.create_quiz_question(course_id, str(result.get('id')), q_payload)
+                output.append(f"Added quiz question (ID: {q_res.get('id')})")
+            except Exception as e:  # pragma: no cover
+                output.append(f"Failed to add question: {e}")
+        # Auto create rubric if criteria present
+        if params.get('rubric_criteria'):
+            try:
+                rubric_data: Dict[str, Any] = {
+                    'rubric[title]': f"Rubric for {name}",
+                    'rubric[free_form_criterion_comments]': 'true'
+                }
+                for idx, c in enumerate(params['rubric_criteria']):
+                    rubric_data[f'rubric[criteria][{idx}][description]'] = c['description']
+                    rubric_data[f'rubric[criteria][{idx}][points]'] = c['points']
+                rub = self.client.create_rubric(course_id, rubric_data)
+                try:
+                    self.client.attach_rubric(course_id, str(rub.get('id')), str(result.get('id')), association_type='Quiz')
+                    output.append(f"Created and attached rubric (ID: {rub.get('id')})")
+                except Exception as e:  # pragma: no cover
+                    output.append(f"Rubric attach failed: {e}")
+            except Exception as e:  # pragma: no cover
+                output.append(f"Rubric creation failed: {e}")
+        return " \n".join(output)
 
-    def _create_quiz_question(self, params: Dict[str, Any]) -> str:
-        course_id = params.get('course_id')
-        quiz_id = params.get('quiz_id')
-        question_text = params.get('question')
-        if not all([course_id, quiz_id, question_text]):
-            return "Please provide course_id, quiz_id, and question text."
+    def _build_question_payload(self, params: Dict[str, Any]) -> Dict[str, Any]:
         answers: List[str] = params.get('answers', [])
         question_data: Dict[str, Any] = {
             'question[question_name]': params.get('name','Question'),
-            'question[question_text]': question_text,
+            'question[question_text]': params.get('question'),
             'question[points_possible]': params.get('points', 1),
             'question[question_type]': 'multiple_choice_question' if answers else 'short_answer_question'
         }
@@ -507,7 +561,15 @@ If unclear, return {{"action": null, "params": {{}}}}."""
             for idx, ans in enumerate(answers):
                 question_data[f'question[answers][{idx}][text]'] = ans
                 question_data[f'question[answers][{idx}][weight]'] = 100 if idx == 0 else 0
-        result = self.client.create_quiz_question(course_id, quiz_id, question_data)
+        return question_data
+
+    def _create_quiz_question(self, params: Dict[str, Any]) -> str:
+        course_id = params.get('course_id')
+        quiz_id = params.get('quiz_id')
+        question_text = params.get('question')
+        if not all([course_id, quiz_id, question_text]):
+            return "Please provide course_id, quiz_id, and question text."
+        result = self.client.create_quiz_question(course_id, quiz_id, self._build_question_payload(params))
         return f"Added quiz question (ID: {result.get('id')})"
 
     def _list_rubrics(self, params: Dict[str, Any]) -> str:
