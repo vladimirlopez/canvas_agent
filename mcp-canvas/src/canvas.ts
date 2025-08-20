@@ -115,6 +115,11 @@ export class CanvasClient {
     return this.request<T>({ method: 'DELETE', path });
   }
 
+  // Expose base URL for advanced flows (e.g., file upload second stage)
+  getBaseUrl(): string { return this.baseUrl; }
+  // Provide auth headers for custom fetch operations
+  authHeaders(extra: Record<string,string> = {}): Record<string,string> { return this.headers(extra); }
+
   // Test connection method
   async testConnection(): Promise<{ success: boolean; user?: any; error?: string }> {
     try {

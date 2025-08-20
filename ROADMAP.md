@@ -33,7 +33,7 @@ Gaps / Missing Teacher Capabilities
 
 Strategic Phases
 ----------------
-Phase 1 (Foundational Expansion) [IN PROGRESS]
+Phase 1 (Foundational Expansion) ✅ (Completed)
 - Add Pages support: list/create simple HTML page.
 - Add File upload abstraction (two-step Canvas upload) + keep existing list_files.
 - Add Assignment update action (change description, due date).
@@ -51,8 +51,9 @@ Phase 2 Status
 - [x] Real quiz creation action.
 - [x] Quiz heuristic (explicit "real" / "graded" quiz detection).
 - [x] Rubric CRUD + attach.
-- [ ] Auto add first MC question from inline answers.
-- [ ] Inline rubric criteria parsing from natural language.
+- [x] Auto add first MC question from inline answers.
+- [x] Inline rubric criteria parsing from natural language.
+- [ ] Quiz question bank management (future optional).
 
 Phase 3 (Content & Communication)
 - Discussions: list/create topic, reply, close.
@@ -103,8 +104,8 @@ Why It Can't Do "Full Teacher" Yet
 7. Date/Time Semantics: Limited phrase parsing leads to frequent clarifications or incorrect scheduling for natural teacher phrasing.
 8. Testing & Reliability Gaps: Lack of tests for new actions would make rapid expansion brittle; deferred until after initial refactor.
 
-Phase 1 Detailed Task List (Current Focus)
------------------------------------------
+Phase 1 Detailed Task List (Completed)
+-------------------------------------
 - [x] Roadmap file.
 - [x] Pages: list_pages, create_page (client + dispatcher).
 - [x] File upload: upload_file (client + dispatcher) basic path.
@@ -112,7 +113,7 @@ Phase 1 Detailed Task List (Current Focus)
 - [x] Heuristic extensions: detect page creation & file upload phrasing; improved due date phrases.
 - [x] Date parsing helper `_parse_due_date` centralizing logic.
 - [x] Tests: heuristic parser (quiz, page, date phrases) baseline.
-- [ ] Action registry documentation update.
+- [x] Action registry + documentation generation (ACTION_REFERENCE.md).
 
 Success Criteria for Phase 1
 ----------------------------
@@ -134,13 +135,40 @@ Risks & Mitigations
 - Data Loss / Destructive Actions: Add confirmation or dry-run preview before deletes or mass updates (future phases).
 - Time Zone Issues: Store / display timezone assumption; later add configuration & conversion.
 
-Next Immediate Steps
---------------------
-1. Finalize Phase 1 checkboxes (mark implemented features as done).
-2. Implement Phase 2 (real quizzes + rubric CRUD + attach).
-3. Add/update tests focusing on quiz/rubric creation heuristics.
-4. Document new actions in README.
-5. Prepare issue labels for future phases.
+MCP Integration Progress
+------------------------
+Exposed Tools (MCP):
+- [x] create_assignment
+- [x] attach_rubric_to_assignment
+- [ ] create_rubric (separate)
+- [ ] list_rubrics
+- [ ] create_quiz
+- [ ] create_quiz_question
+- [ ] list_assignments
+- [ ] list_modules
+- [ ] create_module
+- [ ] add_module_item
+- [ ] list_pages
+- [ ] create_page
+- [ ] upload_file (multipart) (complex; planned)
+
+Planned Enhancements:
+- [ ] Central auto-generation of MCP tool schemas from Python action metadata.
+- [ ] Safety: confirmation-required flag honored by MCP (tool returns preview requiring explicit follow-up tool call to confirm).
+- [ ] Streaming progress events for multi-step operations (bulk module creation, file batch uploads).
+
+Next Immediate Steps (Updated)
+------------------------------
+1. Expand MCP tool surface to core read/write academic content (assignments, quizzes, modules, pages, rubrics).
+2. Add validation tests for action metadata enforcement (missing param -> clear error) & integrate into MCP responses.
+3. Implement confirmation flow scaffold for publish/unpublish and destructive future actions.
+4. Auto-generate MCP JSON Schemas from Python ACTION_METADATA (single source of truth).
+5. Extend file upload to MCP (multipart negotiation) & add progress feedback.
+6. Begin Phase 3 discussions endpoints (list/create/reply) groundwork.
+
+Stretch (If ahead):
+- Prototype multi-step plan preview (dry-run plan of N actions) with diff summary.
+- Add grading read-only (list submissions) before write operations.
 
 --
 Maintained: auto-generated initial version (Phase 1 start). Update as tasks complete.

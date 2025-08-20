@@ -6,6 +6,7 @@ from .llm_enhanced import ollama_chat_api
 import json
 import re
 from datetime import datetime, timedelta, timezone
+from .action_metadata import ACTION_METADATA
 
 class CanvasActionDispatcher:
     def __init__(self, client: CanvasClientEnhanced, llm_model: str | None = None):
@@ -46,7 +47,11 @@ class CanvasActionDispatcher:
         if fast.get('action'):
             action = fast['action']
             try:
-                return self.action_registry[action](fast.get('params', {}))
+                params = fast.get('params', {})
+                validation_error = self._validate_action_inputs(action, params)
+                if validation_error:
+                    return validation_error
+                return self.action_registry[action](params)
             except Exception as e:  # pragma: no cover
                 return f"Error executing {action}: {e}"
 
@@ -54,7 +59,11 @@ class CanvasActionDispatcher:
         action = intent_result.get('action')
         if action and action in self.action_registry:
             try:
-                return self.action_registry[action](intent_result.get('params', {}))
+                params = intent_result.get('params', {})
+                validation_error = self._validate_action_inputs(action, params)
+                if validation_error:
+                    return validation_error
+                return self.action_registry[action](params)
             except Exception as e:  # pragma: no cover
                 return f"Error executing {action}: {e}"
         return self._handle_conversational_request(user_request)
@@ -434,6 +443,23 @@ If unclear, return {{"action": null, "params": {{}}}}."""
             return ollama_chat_api(self.llm_model, messages)
         except Exception as e:
             return f"Sorry, I encountered an error: {e}"
+
+    # --------- Validation --------- #
+    def _validate_action_inputs(self, action: str, params: Dict[str, Any]) -> Optional[str]:
+        meta = ACTION_METADATA.get(action)
+        if not meta:
+            return None
+        missing = []
+        for p, info in meta.get('params', {}).items():
+            if info.get('required') and (p not in params or params.get(p) in (None, '')):
+                missing.append(p)
+        if missing:
+            return f"Missing required parameters for {action}: {', '.join(missing)}"
+        # Confirmation stub (future interactive flow)
+        if meta.get('confirm'):
+            # In a future interactive version, we'd return a prompt asking for confirmation.
+            pass
+        return None
 
     # Action implementations (subset retained)
     def _list_courses(self, params: Dict[str, Any]) -> str:

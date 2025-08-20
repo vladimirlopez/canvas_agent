@@ -4,6 +4,7 @@
   "description": "MCP server for Canvas LMS automation",
   "main": "dist/index.js",
   "scripts": {
+    "prebuild": "cd .. && python python/canvas_agent/apps/generate_mcp_schemas.py && python python/canvas_agent/apps/generate_mcp_action_meta.py",
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "start": "node dist/index.js",

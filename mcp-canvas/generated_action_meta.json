@@ -1,0 +1,10 @@
+{
+  "actions": {
+    "publish_course": {
+      "confirm": true
+    },
+    "unpublish_course": {
+      "confirm": true
+    }
+  }
+}

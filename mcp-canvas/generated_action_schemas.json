@@ -1,0 +1,473 @@
+{
+  "actions": {
+    "add_module_item": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": ""
+        },
+        "module_id": {
+          "type": "number",
+          "description": ""
+        },
+        "title": {
+          "type": "string",
+          "description": ""
+        },
+        "type": {
+          "type": "string",
+          "description": ""
+        },
+        "content_id": {
+          "type": "number",
+          "description": ""
+        }
+      },
+      "required": [
+        "course_id",
+        "module_id",
+        "title",
+        "type"
+      ]
+    },
+    "attach_rubric": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Course ID"
+        },
+        "rubric_id": {
+          "type": "number",
+          "description": "Rubric ID"
+        },
+        "association_id": {
+          "type": "number",
+          "description": "Assignment or Quiz ID"
+        },
+        "association_type": {
+          "type": "string",
+          "description": "Assignment or Quiz"
+        }
+      },
+      "required": [
+        "course_id",
+        "rubric_id",
+        "association_id"
+      ]
+    },
+    "create_announcement": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": ""
+        },
+        "title": {
+          "type": "string",
+          "description": ""
+        },
+        "message": {
+          "type": "string",
+          "description": ""
+        }
+      },
+      "required": [
+        "course_id",
+        "title",
+        "message"
+      ]
+    },
+    "create_assignment": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Course ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Assignment name"
+        },
+        "description": {
+          "type": "string",
+          "description": "HTML description"
+        },
+        "points_possible": {
+          "type": "number",
+          "description": "Points (default 100)"
+        },
+        "due_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO8601 due date"
+        }
+      },
+      "required": [
+        "course_id",
+        "name"
+      ]
+    },
+    "create_module": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Course ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Module name"
+        }
+      },
+      "required": [
+        "course_id",
+        "name"
+      ]
+    },
+    "create_page": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": ""
+        },
+        "title": {
+          "type": "string",
+          "description": ""
+        },
+        "body": {
+          "type": "string",
+          "description": ""
+        }
+      },
+      "required": [
+        "course_id",
+        "title"
+      ]
+    },
+    "create_quiz": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Course ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Quiz title"
+        },
+        "description": {
+          "type": "string",
+          "description": "HTML description"
+        },
+        "points_possible": {
+          "type": "number",
+          "description": "Points (sum of questions)"
+        },
+        "due_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Due date ISO"
+        },
+        "question": {
+          "type": "string",
+          "description": "Single question text (auto add)"
+        },
+        "answers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of answers (first correct if provided)"
+        },
+        "rubric_criteria": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "points": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "description",
+              "points"
+            ]
+          },
+          "description": "List of {description, points}"
+        }
+      },
+      "required": [
+        "course_id",
+        "name"
+      ]
+    },
+    "create_quiz_question": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Course ID"
+        },
+        "quiz_id": {
+          "type": "number",
+          "description": "Quiz ID"
+        },
+        "question": {
+          "type": "string",
+          "description": "Question text"
+        },
+        "answers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Answers (first treated correct)"
+        }
+      },
+      "required": [
+        "course_id",
+        "quiz_id",
+        "question"
+      ]
+    },
+    "create_rubric": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Course ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Rubric title"
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "points": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "description",
+              "points"
+            ]
+          },
+          "description": "List of {description, points}"
+        }
+      },
+      "required": [
+        "course_id",
+        "title"
+      ]
+    },
+    "get_course_info": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Canvas course numeric ID"
+        }
+      },
+      "required": [
+        "course_id"
+      ]
+    },
+    "get_user_profile": {
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "list_announcements": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": ""
+        }
+      },
+      "required": [
+        "course_id"
+      ]
+    },
+    "list_assignments": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Course ID"
+        }
+      },
+      "required": [
+        "course_id"
+      ]
+    },
+    "list_courses": {
+      "type": "object",
+      "properties": {}
+    },
+    "list_files": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": ""
+        }
+      },
+      "required": [
+        "course_id"
+      ]
+    },
+    "list_module_items": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Course ID"
+        },
+        "module_id": {
+          "type": "number",
+          "description": "Module ID"
+        }
+      },
+      "required": [
+        "course_id",
+        "module_id"
+      ]
+    },
+    "list_modules": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Course ID"
+        }
+      },
+      "required": [
+        "course_id"
+      ]
+    },
+    "list_pages": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": ""
+        }
+      },
+      "required": [
+        "course_id"
+      ]
+    },
+    "list_rubrics": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Course ID"
+        }
+      },
+      "required": [
+        "course_id"
+      ]
+    },
+    "list_students": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": ""
+        }
+      },
+      "required": [
+        "course_id"
+      ]
+    },
+    "publish_course": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Canvas course numeric ID"
+        }
+      },
+      "required": [
+        "course_id"
+      ]
+    },
+    "unpublish_course": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Canvas course numeric ID"
+        }
+      },
+      "required": [
+        "course_id"
+      ]
+    },
+    "update_assignment": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": "Course ID"
+        },
+        "assignment_id": {
+          "type": "number",
+          "description": "Assignment ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "New name"
+        },
+        "description": {
+          "type": "string",
+          "description": "New description"
+        },
+        "due_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "New due date ISO"
+        }
+      },
+      "required": [
+        "course_id",
+        "assignment_id"
+      ]
+    },
+    "upload_file": {
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "number",
+          "description": ""
+        },
+        "filepath": {
+          "type": "string",
+          "description": "Relative or absolute path to file"
+        }
+      },
+      "required": [
+        "course_id",
+        "filepath"
+      ]
+    }
+  }
+}
