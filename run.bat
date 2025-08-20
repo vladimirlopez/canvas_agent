@@ -29,6 +29,8 @@ IF NOT EXIST .env (
 )
 
 echo [Run] Starting Streamlit (Ctrl+C to stop)...
+REM Ensure PYTHONPATH includes the 'python' folder so 'canvas_agent' package is importable
+set PYTHONPATH=%CD%\python;%PYTHONPATH%
 REM Updated to packaged Streamlit entrypoint
 .venv\Scripts\python -m streamlit run python/canvas_agent/apps/streamlit_app.py
 

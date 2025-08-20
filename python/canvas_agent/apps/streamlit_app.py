@@ -8,16 +8,27 @@ Differences from legacy app_enhanced.py:
 """
 from __future__ import annotations
 import time
+import os
+import sys
 import streamlit as st
 from typing import Optional, List, Dict, Tuple
 
-from canvas_agent.config import load_settings
-from canvas_agent.canvas_client_enhanced import CanvasClientEnhanced
-from canvas_agent.llm_enhanced import (
+# Ensure the parent 'python' directory (which contains the canvas_agent package)
+# is on the module search path when running via `streamlit run python/canvas_agent/apps/streamlit_app.py`
+_APP_DIR = os.path.dirname(__file__)
+_PY_ROOT = os.path.abspath(os.path.join(_APP_DIR, "..", ".."))  # .../CanvasAgent/python
+_PROJECT_ROOT = os.path.abspath(os.path.join(_PY_ROOT, ".."))     # .../CanvasAgent
+for _p in (_PY_ROOT, _PROJECT_ROOT):  # pragma: no cover - environment setup
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from canvas_agent.config import load_settings  # type: ignore  # noqa: E402
+from canvas_agent.canvas_client_enhanced import CanvasClientEnhanced  # type: ignore  # noqa: E402
+from canvas_agent.llm_enhanced import (  # type: ignore  # noqa: E402
     list_ollama_models,
     check_ollama_service,
 )
-from canvas_agent.action_dispatcher import CanvasActionDispatcher
+from canvas_agent.action_dispatcher import CanvasActionDispatcher  # type: ignore  # noqa: E402
 
 
 # ------------------------- Session State Helpers ------------------------- #
@@ -202,7 +213,8 @@ def chat_ui(dispatcher: Optional[CanvasActionDispatcher], need_token: bool, have
 def main() -> None:  # pragma: no cover - UI wiring
     configure_page()
     init_session_state()
-    settings = load_settings(getattr(st, "secrets", None))
+    # Avoid passing Streamlit secrets object directly (unhashable for lru_cache)
+    settings = load_settings()
 
     st.sidebar.title("🎓 CanvasAgent Settings")
 
