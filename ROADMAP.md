@@ -46,6 +46,14 @@ Phase 2 (Assessment Depth)
 - Add rubric CRUD (create_rubric, list_rubrics) & attach rubric (Python parity with MCP).
 - Support attaching rubric during assignment/quiz creation via heuristic fields.
 
+Phase 2 Status
+--------------
+- [x] Real quiz creation action.
+- [x] Quiz heuristic (explicit "real" / "graded" quiz detection).
+- [x] Rubric CRUD + attach.
+- [ ] Auto add first MC question from inline answers.
+- [ ] Inline rubric criteria parsing from natural language.
+
 Phase 3 (Content & Communication)
 - Discussions: list/create topic, reply, close.
 - Pages: update, publish toggle, link insertion helper.
@@ -98,12 +106,12 @@ Why It Can't Do "Full Teacher" Yet
 Phase 1 Detailed Task List (Current Focus)
 -----------------------------------------
 - [x] Roadmap file.
-- [ ] Pages: list_pages, create_page (client + dispatcher).
-- [ ] File upload: upload_file (client + dispatcher) basic path.
-- [ ] Assignment update: update_assignment (due date, description) minimal.
-- [ ] Heuristic extensions: detect page creation & file upload phrasing; improved due date phrases.
-- [ ] Date parsing helper `_parse_due_date` centralizing logic.
-- [ ] Tests: heuristic parser (quiz, page, date phrases) baseline.
+- [x] Pages: list_pages, create_page (client + dispatcher).
+- [x] File upload: upload_file (client + dispatcher) basic path.
+- [x] Assignment update: update_assignment (due date, description) minimal.
+- [x] Heuristic extensions: detect page creation & file upload phrasing; improved due date phrases.
+- [x] Date parsing helper `_parse_due_date` centralizing logic.
+- [x] Tests: heuristic parser (quiz, page, date phrases) baseline.
 - [ ] Action registry documentation update.
 
 Success Criteria for Phase 1

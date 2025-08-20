@@ -36,13 +36,32 @@ Legacy root scripts have been removed in favor of the packaged layout. Use the p
 - Robust Canvas REST client with retry, exponential backoff, and typed responses
 - Environment fallback: supports `CANVAS_TOKEN` or legacy `CANVAS_API_TOKEN`
 
-## Roadmap (Next Refactor Steps)
+## Current Capabilities (Snapshot)
 
-- Finish migrating Python modules into `python/canvas_agent/` package (dispatcher, LLM helpers)
-- Replace duplicate legacy clients with single maintained enhanced client
-- Add tests for MCP tools (mock Canvas responses)
-- Introduce unified configuration loader (Python + Node share .env contract)
-- Optional: Add additional MCP tools (module creation, file upload)
+Implemented (Python Streamlit + Dispatcher):
+- Courses: list, publish/unpublish
+- Assignments: list, create, update (basic fields)
+- Quizzes: real quiz creation (Classic) when explicitly requested as "real"/"graded" quiz
+- Quiz surrogate via assignment heuristic (generic "create a quiz")
+- Quiz questions: basic creation (multiple choice or short answer) via dispatcher action (manual param form or future NL)
+- Modules & Items: list, create module, add assignment item
+- Pages: list, create
+- Files: list, upload (simplified two-step)
+- Announcements: list, create
+- Students: list
+- User profile fetch
+- Rubrics: create, list, attach to assignment/quiz
+
+Heuristics:
+- Fast parsing for assignment/quiz/page creation, file upload, assignment update, quiz (real vs surrogate) selection
+- Due date phrases: tomorrow, next weekday (Mon..Sun), in N days/weeks, explicit YYYY-MM-DD, simple time (5pm)
+- Topic extraction ("about X") for auto question/description
+
+MCP Tools (subset):
+- create_assignment
+- attach_rubric_to_assignment
+
+See `ROADMAP.md` for phased plan.
 
 ## Getting a Canvas LMS API Token (Free Teacher Account)
 
@@ -102,13 +121,16 @@ If you store credentials in `.env`, they will be auto-loaded via `python-dotenv`
 4. Type a prompt like: "list courses" or "list assignments 123".
 5. The app tries to match an action; otherwise it sends to the LLM.
 
-## Supported Action Commands (naive parsing)
+## Example Natural Language Prompts
 
-- `list courses`
-- `list assignments <course_id>`
-- `list files <course_id>`
-- `download file <file_id>` (saved to `downloads/<file_id>`)
-- `upload file <course_id> <local_path>`
+Try in the chat:
+- "List courses"
+- "Create a quiz about mitosis due in 2 weeks in course 123"
+- "Create a real quiz titled 'Cell Cycle Check' about mitosis worth 5 points due tomorrow in course 123"
+- "Create a page titled Class Policies about late work in course 123"
+- "Upload file syllabus.pdf to course 123"
+- "Update assignment 456 set due next Monday 5pm in course 123"
+- "Attach rubric 555 to assignment 456 in course 123"
 
 ## Security Notes
 
